@@ -464,22 +464,32 @@ class CharacterControllerDemo {
     texture.encoding = THREE.sRGBEncoding;
     this._scene.background = texture;
 
-    const plane = new THREE.Mesh(
-        new THREE.PlaneGeometry(100, 100, 10, 10),
-        new THREE.MeshStandardMaterial({
-            color: 0x808080,
-          }));
-    plane.castShadow = false;
-    plane.receiveShadow = true;
-    plane.rotation.x = -Math.PI / 2;
-    this._scene.add(plane);
-
     this._mixers = [];
     this._previousRAF = null;
 
     this._LoadAnimatedModel();
+    this._LoadEnvironment();
+
     this._RAF();
   }
+
+  _LoadEnvironment() {
+    const loader = new GLTFLoader();
+    loader.load('./resources/environment/scene_export.glb', (gltf) => {
+      gltf.scene.traverse(child => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      gltf.scene.position.set(0, 0, 0);
+      gltf.scene.scale.setScalar(15.0);
+
+      this._scene.add(gltf.scene);
+    });
+  }
+
 
   _LoadAnimatedModel() {
     const params = {
