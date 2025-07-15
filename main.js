@@ -36,7 +36,7 @@ class BasicCharacterController {
 
     this._LoadModels();
   }
-    get Position() {
+  get Position() {
     return this._target.position;
   }
 
@@ -454,7 +454,7 @@ class Application {
     this._threejs.setPixelRatio(window.devicePixelRatio);
     this._threejs.setSize(window.innerWidth, window.innerHeight);
     this._threejs.toneMapping = THREE.ACESFilmicToneMapping;
-    this._threejs.toneMappingExposure = 1.5;
+    this._threejs.toneMappingExposure = 1;
 
     document.body.appendChild(this._threejs.domElement);
 
@@ -473,8 +473,8 @@ class Application {
     });
     this._scene = new THREE.Scene();
 
-    let directionalLight = new THREE.DirectionalLight(0xff8c66, 0.5);
-    directionalLight.position.set(100, 35, 50); 
+    let directionalLight = new THREE.DirectionalLight(0xff8c66, 0.8);
+    directionalLight.position.set(100, 35, 50);
     directionalLight.target.position.set(0, 0, 0);
     directionalLight.castShadow = true;
     directionalLight.shadow.bias = -0.001;
@@ -482,25 +482,25 @@ class Application {
     directionalLight.shadow.mapSize.height = 4096;
     directionalLight.shadow.camera.near = 0.1;
     directionalLight.shadow.camera.far = 500.0;
-    directionalLight.shadow.camera.left = 100; 
+    directionalLight.shadow.camera.left = 100;
     directionalLight.shadow.camera.right = -100;
     directionalLight.shadow.camera.top = 100;
     directionalLight.shadow.camera.bottom = -100;
     this._scene.add(directionalLight);
     this._directionalLight = directionalLight;
 
-    let ambientLight = new THREE.AmbientLight(0xFF6666, 0.35);
+    let ambientLight = new THREE.AmbientLight(0xc92e3b, 0.3);
     this._scene.add(ambientLight);
 
-    const spotLight = new THREE.SpotLight(0xFFFFDD, 4);
-    spotLight.position.set(25, 60, 800); 
-    spotLight.angle = Math.PI / 8; 
-    spotLight.penumbra = 0.8; 
+    const spotLight = new THREE.SpotLight(0xfc032c, 12);
+    spotLight.position.set(0, 10, 550);
+    spotLight.angle = Math.PI / 8;
+    spotLight.penumbra = 0.8;
     spotLight.decay = 2;
-    spotLight.distance = 200; 
-    spotLight.castShadow = false; 
+    spotLight.distance = 500;
+    spotLight.castShadow = false;
     const spotLightTarget = new THREE.Object3D();
-    spotLightTarget.position.set(0, 5, -30); 
+    spotLightTarget.position.set(0, 5, -30);
     this._scene.add(spotLightTarget);
     spotLight.target = spotLightTarget;
     this._scene.add(spotLight);
@@ -521,17 +521,34 @@ class Application {
       pmremGenerator.dispose();
     });
 
-    this._waterFlowSpeed = 0.5;
+    this._waterFlowSpeed = 2;
 
     this._mixers = [];
     this._previousRAF = null;
 
     this._LoadAnimatedModel();
     this._LoadEnvironment();
+    this._LoadPoroModel();
     this._CreateWater();
 
     this._RAF();
     this._CreateRain();
+  }
+
+  _LoadPoroModel() {
+    const loader = new GLTFLoader();
+    loader.load('./resources/poro-lol/source/model.glb', (gltf) => {
+      const poroModel = gltf.scene;
+      poroModel.position.set(0, 10, 445);
+      poroModel.scale.setScalar(10.0);
+      poroModel.traverse(child => {
+        if (child.isMesh) {
+          child.castShadow = true;
+        }
+      });
+      gltf.scene.rotation.y = Math.PI;
+      this._scene.add(poroModel);
+    });
   }
 
   _LoadEnvironment() {
@@ -561,7 +578,7 @@ class Application {
         }
       });
 
-      gltf.scene.position.set(0, 0, 250);
+      gltf.scene.position.set(0, 1.5, 250);
       gltf.scene.rotation.y = Math.PI;
       gltf.scene.scale.setScalar(15.0);
 
@@ -686,16 +703,16 @@ class Application {
         waterNormals: waterNormals,
         sunDirection: this._directionalLight.position.clone().normalize(),
         sunColor: this._directionalLight.color,
-        waterColor: 0xc47e85, 
+        waterColor: 0xc47e85,
         distortionScale: 100,
         fog: this._scene.fog !== undefined
       }
     );
 
     this._water.rotation.x = -Math.PI / 2;
-    this._water.position.y = -1;
+    this._water.position.y = 0;
     this._scene.add(this._water);
-    this._water.material.uniforms[ 'size' ].value = 4.0;
+    this._water.material.uniforms['size'].value = 4.0;
   }
 
   _OnWindowResize() {
@@ -731,7 +748,7 @@ class Application {
     this._UpdateRain(timeElapsedS);
 
     if (this._water) {
-        this._water.material.uniforms['time'].value += timeElapsedS * this._waterFlowSpeed;
+      this._water.material.uniforms['time'].value += timeElapsedS * this._waterFlowSpeed;
     }
   }
 }
