@@ -1,8 +1,9 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.118/build/three.module.js';
 
-import {FBXLoader} from 'https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/loaders/FBXLoader.js';
-import {GLTFLoader} from 'https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/loaders/GLTFLoader.js';
-import {OrbitControls} from 'https://cdn.jsdelivr.net/npm/three@0.118/examples/jsm/controls/OrbitControls.js';
+import { FBXLoader } from 'https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/loaders/FBXLoader.js';
+import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.118/examples/jsm/controls/OrbitControls.js';
+import { EXRLoader } from 'https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/loaders/EXRLoader.js';
 
 
 class BasicCharacterControllerProxy {
@@ -30,7 +31,7 @@ class BasicCharacterController {
     this._animations = {};
     this._input = new BasicCharacterControllerInput();
     this._stateMachine = new CharacterFSM(
-        new BasicCharacterControllerProxy(this._animations));
+      new BasicCharacterControllerProxy(this._animations));
 
     this._LoadModels();
   }
@@ -57,7 +58,7 @@ class BasicCharacterController {
       const _OnLoad = (animName, anim) => {
         const clip = anim.animations[0];
         const action = this._mixer.clipAction(clip);
-  
+
         this._animations[animName] = {
           clip: clip,
           action: action,
@@ -81,13 +82,13 @@ class BasicCharacterController {
 
     const velocity = this._velocity;
     const frameDecceleration = new THREE.Vector3(
-        velocity.x * this._decceleration.x,
-        velocity.y * this._decceleration.y,
-        velocity.z * this._decceleration.z
+      velocity.x * this._decceleration.x,
+      velocity.y * this._decceleration.y,
+      velocity.z * this._decceleration.z
     );
     frameDecceleration.multiplyScalar(timeInSeconds);
     frameDecceleration.z = Math.sign(frameDecceleration.z) * Math.min(
-        Math.abs(frameDecceleration.z), Math.abs(velocity.z));
+      Math.abs(frameDecceleration.z), Math.abs(velocity.z));
 
     velocity.add(frameDecceleration);
 
@@ -147,7 +148,7 @@ class BasicCharacterController {
 
 class BasicCharacterControllerInput {
   constructor() {
-    this._Init();    
+    this._Init();
   }
 
   _Init() {
@@ -184,7 +185,7 @@ class BasicCharacterControllerInput {
   }
 
   _onKeyUp(event) {
-    switch(event.keyCode) {
+    switch (event.keyCode) {
       case 87: // w
         this._keys.forward = false;
         break;
@@ -217,7 +218,7 @@ class FiniteStateMachine {
 
   SetState(name) {
     const prevState = this._currentState;
-    
+
     if (prevState) {
       if (prevState.Name == name) {
         return;
@@ -259,9 +260,9 @@ class State {
     this._parent = parent;
   }
 
-  Enter() {}
-  Exit() {}
-  Update() {}
+  Enter() { }
+  Exit() { }
+  Update() { }
 };
 
 class WalkState extends State {
@@ -411,6 +412,8 @@ class CharacterControllerDemo {
     this._threejs.shadowMap.type = THREE.PCFSoftShadowMap;
     this._threejs.setPixelRatio(window.devicePixelRatio);
     this._threejs.setSize(window.innerWidth, window.innerHeight);
+    this._threejs.toneMapping = THREE.ACESFilmicToneMapping;
+    this._threejs.toneMappingExposure = 1.0;
 
     document.body.appendChild(this._threejs.domElement);
 
@@ -452,33 +455,64 @@ class CharacterControllerDemo {
     controls.target.set(0, 10, 0);
     controls.update();
 
-    const loader = new THREE.CubeTextureLoader();
-    const texture = loader.load([
-        './resources/posx.jpg',
-        './resources/negx.jpg',
-        './resources/posy.jpg',
-        './resources/negy.jpg',
-        './resources/posz.jpg',
-        './resources/negz.jpg',
-    ]);
-    texture.encoding = THREE.sRGBEncoding;
-    this._scene.background = texture;
-
-    const plane = new THREE.Mesh(
-        new THREE.PlaneGeometry(100, 100, 10, 10),
-        new THREE.MeshStandardMaterial({
-            color: 0x808080,
-          }));
-    plane.castShadow = false;
-    plane.receiveShadow = true;
-    plane.rotation.x = -Math.PI / 2;
-    this._scene.add(plane);
+    const exrLoader = new EXRLoader();
+    exrLoader.load('./resources/environment/twilight.exr', (texture) => {
+      const pmremGenerator = new THREE.PMREMGenerator(this._threejs);
+      pmremGenerator.compileEquirectangularShader();
+      const envMap = pmremGenerator.fromEquirectangular(texture).texture;
+      this._scene.background = envMap;
+      this._scene.environment = envMap;
+      texture.dispose();
+      pmremGenerator.dispose();
+    });
 
     this._mixers = [];
     this._previousRAF = null;
 
     this._LoadAnimatedModel();
+    this._LoadEnvironment();
+
     this._RAF();
+  }
+
+  _LoadEnvironment() {
+    const loader = new GLTFLoader();
+    loader.load('./resources/environment/scene_export.glb', (gltf) => {
+      gltf.scene.traverse(child => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+
+          if (child.isLight) {
+            child.castShadow = true;
+            child.shadow.bias = -0.001;
+            child.shadow.mapSize.width = 4096;
+            child.shadow.mapSize.height = 2048;
+          }
+
+          if (child.material && child.material.map) {
+            const texture = child.material.map;
+            const maxAnisotropy = this._threejs.capabilities.getMaxAnisotropy();
+            texture.anisotropy = maxAnisotropy;
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(10, 10);
+            texture.needsUpdate = true;
+          }
+        }
+      });
+
+      gltf.scene.position.set(0, 0, 250);
+      gltf.scene.rotation.y = Math.PI;
+      gltf.scene.scale.setScalar(15.0);
+
+      this._scene.add(gltf.scene);
+      if (gltf.animations && gltf.animations.length) {
+        const mixer = new THREE.AnimationMixer(gltf.scene);
+        gltf.animations.forEach((clip) => mixer.clipAction(clip).play());
+        this._mixers.push(mixer);
+      }
+    });
   }
 
   _LoadAnimatedModel() {
