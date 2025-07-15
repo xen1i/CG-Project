@@ -455,14 +455,6 @@ class CharacterControllerDemo {
     controls.target.set(0, 10, 0);
     controls.update();
 
-<<<<<<< HEAD
-    const controls = new OrbitControls(
-      this._camera, this._threejs.domElement);
-    controls.target.set(0, 10, 0);
-    controls.update();
-
-=======
->>>>>>> 4ccf0386641aa3c8fce2135a67c8ac41ebd0c3f6
     const exrLoader = new EXRLoader();
     exrLoader.load('./resources/environment/twilight.exr', (texture) => {
       const pmremGenerator = new THREE.PMREMGenerator(this._threejs);
