@@ -4,6 +4,7 @@ import { FBXLoader } from 'https://cdn.jsdelivr.net/npm/three@0.118.1/examples/j
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.118/examples/jsm/controls/OrbitControls.js';
 import { EXRLoader } from 'https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/loaders/EXRLoader.js';
+import { Water } from 'https://cdn.jsdelivr.net/npm/three@0.118/examples/jsm/objects/Water.js';
 
 
 class BasicCharacterControllerProxy {
@@ -471,6 +472,7 @@ class CharacterControllerDemo {
 
     this._LoadAnimatedModel();
     this._LoadEnvironment();
+    this._CreateWater();
 
     this._RAF();
     this._CreateRain();
@@ -647,6 +649,33 @@ class CharacterControllerDemo {
     this._rain.geometry.attributes.position.needsUpdate = true;
   }
 
+  _CreateWater() {
+    const waterGeometry = new THREE.PlaneGeometry(2000, 2000);
+    const waterNormals = new THREE.TextureLoader().load('./resources/water_norm.jpg', (texture) => {
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    });
+
+    waterNormals.repeat.set(10, 10);
+
+    this._water = new Water(
+      waterGeometry,
+      {
+        textureWidth: 512,
+        textureHeight: 512,
+        waterNormals: waterNormals,
+        sunDirection: new THREE.Vector3(),
+        sunColor: 0xed5c51,
+        waterColor: 0x6590d6, 
+        distortionScale: 3.7,
+        fog: this._scene.fog !== undefined
+      }
+    );
+
+    this._water.rotation.x = -Math.PI / 2;
+    this._water.position.y = -0.1;
+    this._scene.add(this._water);
+  }
+
   _OnWindowResize() {
     this._camera.aspect = window.innerWidth / window.innerHeight;
     this._camera.updateProjectionMatrix();
@@ -677,6 +706,10 @@ class CharacterControllerDemo {
       this._controls.Update(timeElapsedS);
     }
     this._UpdateRain(timeElapsedS);
+
+    if (this._water) {
+      this._water.material.uniforms['time'].value += timeElapsedS * 0.5;
+    }
   }
 }
 
