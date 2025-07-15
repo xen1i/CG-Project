@@ -36,7 +36,7 @@ class BasicCharacterController {
 
     this._LoadModels();
   }
-     get Position() {
+    get Position() {
     return this._target.position;
   }
 
@@ -213,7 +213,6 @@ class BasicCharacterControllerInput {
   }
 };
 
-
 class FiniteStateMachine {
   constructor() {
     this._states = {};
@@ -247,7 +246,6 @@ class FiniteStateMachine {
   }
 };
 
-
 class CharacterFSM extends FiniteStateMachine {
   constructor(proxy) {
     super();
@@ -261,7 +259,6 @@ class CharacterFSM extends FiniteStateMachine {
     this._AddState('run', RunState);
   }
 };
-
 
 class State {
   constructor(parent) {
@@ -403,8 +400,46 @@ class IdleState extends State {
   }
 };
 
+class ThirdPersonCamera {
+  constructor(params) {
+    this._params = params;
+    this._camera = params.camera;
 
-class CharacterControllerDemo {
+    this._currentPosition = new THREE.Vector3();
+    this._currentLookat = new THREE.Vector3();
+  }
+
+  _CalculateIdealOffset() {
+    const idealOffset = new THREE.Vector3(-15, 20, -30);
+    idealOffset.applyQuaternion(this._params.target.Rotation);
+    idealOffset.add(this._params.target.Position);
+    return idealOffset;
+  }
+
+  _CalculateIdealLookat() {
+    const idealLookat = new THREE.Vector3(0, 10, 50);
+    idealLookat.applyQuaternion(this._params.target.Rotation);
+    idealLookat.add(this._params.target.Position);
+    return idealLookat;
+  }
+
+  Update(timeElapsed) {
+    const idealOffset = this._CalculateIdealOffset();
+    const idealLookat = this._CalculateIdealLookat();
+
+    // const t = 0.05;
+    // const t = 4.0 * timeElapsed;
+    const t = 1.0 - Math.pow(0.001, timeElapsed);
+
+    this._currentPosition.lerp(idealOffset, t);
+    this._currentLookat.lerp(idealLookat, t);
+
+    this._camera.position.copy(this._currentPosition);
+    this._camera.lookAt(this._currentLookat);
+  }
+}
+
+class Application {
   constructor() {
     this._Initialize();
   }
@@ -433,7 +468,9 @@ class CharacterControllerDemo {
     const far = 1000.0;
     this._camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
     this._camera.position.set(25, 10, 25);
-
+    this._thirdPersonCamera = new ThirdPersonCamera({
+      camera: this._camera,
+    });
     this._scene = new THREE.Scene();
 
     let directionalLight = new THREE.DirectionalLight(0xff8c66, 0.5);
@@ -483,6 +520,8 @@ class CharacterControllerDemo {
       texture.dispose();
       pmremGenerator.dispose();
     });
+
+    this._waterFlowSpeed = 0.5;
 
     this._mixers = [];
     this._previousRAF = null;
@@ -568,6 +607,7 @@ class CharacterControllerDemo {
       this._scene.add(fbx);
     });
   }
+
   _CreateRain() {
     const rainCount = 10000;
     const rainGeometry = new THREE.BufferGeometry();
@@ -653,7 +693,7 @@ class CharacterControllerDemo {
     );
 
     this._water.rotation.x = -Math.PI / 2;
-    this._water.position.y = -0.1;
+    this._water.position.y = -1;
     this._scene.add(this._water);
     this._water.material.uniforms[ 'size' ].value = 4.0;
   }
@@ -687,17 +727,17 @@ class CharacterControllerDemo {
     if (this._controls) {
       this._controls.Update(timeElapsedS);
     }
+    this._thirdPersonCamera.Update(timeElapsedS);
     this._UpdateRain(timeElapsedS);
 
     if (this._water) {
-      this._water.material.uniforms['time'].value += timeElapsedS * 0.5;
+        this._water.material.uniforms['time'].value += timeElapsedS * this._waterFlowSpeed;
     }
   }
 }
 
-
 let _APP = null;
 
 window.addEventListener('DOMContentLoaded', () => {
-  _APP = new CharacterControllerDemo();
+  _APP = new Application();
 });
