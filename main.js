@@ -529,10 +529,49 @@ class Application {
     this._LoadAnimatedModel();
     this._LoadEnvironment();
     this._LoadPoroModel();
+    this._LoadCrossFlags();
     this._CreateWater();
 
     this._RAF();
     this._CreateRain();
+  }
+
+  _LoadCrossFlags() {
+    const loader = new GLTFLoader();
+    loader.load('./resources/flags/cross_flag.glb', (gltf) => {
+      const animations = gltf.animations;
+      const flagTemplate = gltf.scene;
+      const instanceCount = 30; 
+
+      const spawnArea = { width: 1000, depth: 1000 };
+      const center = new THREE.Vector3(0, 0, 150);
+
+      for (let i = 0; i < instanceCount; i++) {
+        const newFlag = flagTemplate.clone();
+
+        const x = center.x + (Math.random() - 0.5) * spawnArea.width;
+        const z = center.z + (Math.random() - 0.5) * spawnArea.depth;
+
+        newFlag.position.set(x, 1.5, z); 
+        newFlag.rotation.y = Math.random() * Math.PI * 2;
+        newFlag.scale.set(10, 10, 10); 
+
+        newFlag.traverse(child => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
+        if (animations && animations.length) {
+          const mixer = new THREE.AnimationMixer(newFlag);
+          const action = mixer.clipAction(animations[0]);
+          action.play();
+          this._mixers.push(mixer);
+        }
+        this._scene.add(newFlag);
+      }
+    });
   }
 
   _LoadPoroModel() {
