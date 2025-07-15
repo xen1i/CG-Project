@@ -455,11 +455,14 @@ class CharacterControllerDemo {
     controls.target.set(0, 10, 0);
     controls.update();
 
+<<<<<<< HEAD
     const controls = new OrbitControls(
       this._camera, this._threejs.domElement);
     controls.target.set(0, 10, 0);
     controls.update();
 
+=======
+>>>>>>> 4ccf0386641aa3c8fce2135a67c8ac41ebd0c3f6
     const exrLoader = new EXRLoader();
     exrLoader.load('./resources/environment/twilight.exr', (texture) => {
       const pmremGenerator = new THREE.PMREMGenerator(this._threejs);
@@ -475,8 +478,50 @@ class CharacterControllerDemo {
     this._previousRAF = null;
 
     this._LoadAnimatedModel();
+    this._LoadEnvironment();
+
     this._RAF();
     this._CreateRain();
+  }
+
+  _LoadEnvironment() {
+    const loader = new GLTFLoader();
+    loader.load('./resources/environment/scene_export.glb', (gltf) => {
+      gltf.scene.traverse(child => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+
+          if (child.isLight) {
+            child.castShadow = true;
+            child.shadow.bias = -0.001;
+            child.shadow.mapSize.width = 4096;
+            child.shadow.mapSize.height = 2048;
+          }
+
+          if (child.material && child.material.map) {
+            const texture = child.material.map;
+            const maxAnisotropy = this._threejs.capabilities.getMaxAnisotropy();
+            texture.anisotropy = maxAnisotropy;
+            texture.wrapS = THREE.RepeatWrapping;
+            texture.wrapT = THREE.RepeatWrapping;
+            texture.repeat.set(10, 10);
+            texture.needsUpdate = true;
+          }
+        }
+      });
+
+      gltf.scene.position.set(0, 0, 250);
+      gltf.scene.rotation.y = Math.PI;
+      gltf.scene.scale.setScalar(15.0);
+
+      this._scene.add(gltf.scene);
+      if (gltf.animations && gltf.animations.length) {
+        const mixer = new THREE.AnimationMixer(gltf.scene);
+        gltf.animations.forEach((clip) => mixer.clipAction(clip).play());
+        this._mixers.push(mixer);
+      }
+    });
   }
 
   _LoadEnvironment() {
