@@ -465,7 +465,9 @@ class Application {
     const far = 1000.0;
     this._camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
     this._camera.position.set(25, 10, 25);
-
+    this._thirdPersonCamera = new ThirdPersonCamera({
+      camera: this._camera,
+    });
     this._scene = new THREE.Scene();
 
     let light = new THREE.DirectionalLight(0xFFFFFF, 1.0);
