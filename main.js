@@ -4,6 +4,7 @@ import { FBXLoader } from 'https://cdn.jsdelivr.net/npm/three@0.118.1/examples/j
 import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.118/examples/jsm/controls/OrbitControls.js';
 import { EXRLoader } from 'https://cdn.jsdelivr.net/npm/three@0.118.1/examples/jsm/loaders/EXRLoader.js';
+import { Water } from 'https://cdn.jsdelivr.net/npm/three@0.118/examples/jsm/objects/Water.js';
 
 
 class BasicCharacterControllerProxy {
@@ -34,13 +35,6 @@ class BasicCharacterController {
       new BasicCharacterControllerProxy(this._animations));
 
     this._LoadModels();
-  }
-    get Position() {
-    return this._target.position;
-  }
-
-  get Rotation() {
-    return this._target.quaternion;
   }
 
   _LoadModels() {
@@ -398,50 +392,14 @@ class IdleState extends State {
   Update(_, input) {
     if (input._keys.forward || input._keys.backward) {
       this._parent.SetState('walk');
+    } else if (input._keys.space) {
+      this._parent.SetState('dance');
     }
   }
 };
 
-class ThirdPersonCamera {
-  constructor(params) {
-    this._params = params;
-    this._camera = params.camera;
 
-    this._currentPosition = new THREE.Vector3();
-    this._currentLookat = new THREE.Vector3();
-  }
-
-  _CalculateIdealOffset() {
-    const idealOffset = new THREE.Vector3(-15, 20, -30);
-    idealOffset.applyQuaternion(this._params.target.Rotation);
-    idealOffset.add(this._params.target.Position);
-    return idealOffset;
-  }
-
-  _CalculateIdealLookat() {
-    const idealLookat = new THREE.Vector3(0, 10, 50);
-    idealLookat.applyQuaternion(this._params.target.Rotation);
-    idealLookat.add(this._params.target.Position);
-    return idealLookat;
-  }
-
-  Update(timeElapsed) {
-    const idealOffset = this._CalculateIdealOffset();
-    const idealLookat = this._CalculateIdealLookat();
-
-    // const t = 0.05;
-    // const t = 4.0 * timeElapsed;
-    const t = 1.0 - Math.pow(0.001, timeElapsed);
-
-    this._currentPosition.lerp(idealOffset, t);
-    this._currentLookat.lerp(idealLookat, t);
-
-    this._camera.position.copy(this._currentPosition);
-    this._camera.lookAt(this._currentLookat);
-  }
-}
-
-class Application {
+class CharacterControllerDemo {
   constructor() {
     this._Initialize();
   }
@@ -456,7 +414,7 @@ class Application {
     this._threejs.setPixelRatio(window.devicePixelRatio);
     this._threejs.setSize(window.innerWidth, window.innerHeight);
     this._threejs.toneMapping = THREE.ACESFilmicToneMapping;
-    this._threejs.toneMappingExposure = 1.0;
+    this._threejs.toneMappingExposure = 1.5;
 
     document.body.appendChild(this._threejs.domElement);
 
@@ -470,30 +428,40 @@ class Application {
     const far = 1000.0;
     this._camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
     this._camera.position.set(25, 10, 25);
-    this._thirdPersonCamera = new ThirdPersonCamera({
-      camera: this._camera,
-    });
+
     this._scene = new THREE.Scene();
 
-    let light = new THREE.DirectionalLight(0xFFFFFF, 1.0);
-    light.position.set(-100, 100, 100);
-    light.target.position.set(0, 0, 0);
-    light.castShadow = true;
-    light.shadow.bias = -0.001;
-    light.shadow.mapSize.width = 4096;
-    light.shadow.mapSize.height = 4096;
-    light.shadow.camera.near = 0.1;
-    light.shadow.camera.far = 500.0;
-    light.shadow.camera.near = 0.5;
-    light.shadow.camera.far = 500.0;
-    light.shadow.camera.left = 50;
-    light.shadow.camera.right = -50;
-    light.shadow.camera.top = 50;
-    light.shadow.camera.bottom = -50;
-    this._scene.add(light);
+    let directionalLight = new THREE.DirectionalLight(0xff8c66, 0.5);
+    directionalLight.position.set(100, 35, 50); 
+    directionalLight.target.position.set(0, 0, 0);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.bias = -0.001;
+    directionalLight.shadow.mapSize.width = 4096;
+    directionalLight.shadow.mapSize.height = 4096;
+    directionalLight.shadow.camera.near = 0.1;
+    directionalLight.shadow.camera.far = 500.0;
+    directionalLight.shadow.camera.left = 100; 
+    directionalLight.shadow.camera.right = -100;
+    directionalLight.shadow.camera.top = 100;
+    directionalLight.shadow.camera.bottom = -100;
+    this._scene.add(directionalLight);
+    this._directionalLight = directionalLight;
 
-    light = new THREE.AmbientLight(0xFFFFFF, 0.25);
-    this._scene.add(light);
+    let ambientLight = new THREE.AmbientLight(0xFF6666, 0.35);
+    this._scene.add(ambientLight);
+
+    const spotLight = new THREE.SpotLight(0xFFFFDD, 4);
+    spotLight.position.set(25, 60, 800); 
+    spotLight.angle = Math.PI / 8; 
+    spotLight.penumbra = 0.8; 
+    spotLight.decay = 2;
+    spotLight.distance = 200; 
+    spotLight.castShadow = false; 
+    const spotLightTarget = new THREE.Object3D();
+    spotLightTarget.position.set(0, 5, -30); 
+    this._scene.add(spotLightTarget);
+    spotLight.target = spotLightTarget;
+    this._scene.add(spotLight);
 
     const controls = new OrbitControls(
       this._camera, this._threejs.domElement);
@@ -516,49 +484,10 @@ class Application {
 
     this._LoadAnimatedModel();
     this._LoadEnvironment();
+    this._CreateWater();
 
     this._RAF();
     this._CreateRain();
-  }
-
-  _LoadEnvironment() {
-    const loader = new GLTFLoader();
-    loader.load('./resources/environment/scene_export.glb', (gltf) => {
-      gltf.scene.traverse(child => {
-        if (child.isMesh) {
-          child.castShadow = true;
-          child.receiveShadow = true;
-
-          if (child.isLight) {
-            child.castShadow = true;
-            child.shadow.bias = -0.001;
-            child.shadow.mapSize.width = 4096;
-            child.shadow.mapSize.height = 2048;
-          }
-
-          if (child.material && child.material.map) {
-            const texture = child.material.map;
-            const maxAnisotropy = this._threejs.capabilities.getMaxAnisotropy();
-            texture.anisotropy = maxAnisotropy;
-            texture.wrapS = THREE.RepeatWrapping;
-            texture.wrapT = THREE.RepeatWrapping;
-            texture.repeat.set(10, 10);
-            texture.needsUpdate = true;
-          }
-        }
-      });
-
-      gltf.scene.position.set(0, 0, 250);
-      gltf.scene.rotation.y = Math.PI;
-      gltf.scene.scale.setScalar(15.0);
-
-      this._scene.add(gltf.scene);
-      if (gltf.animations && gltf.animations.length) {
-        const mixer = new THREE.AnimationMixer(gltf.scene);
-        gltf.animations.forEach((clip) => mixer.clipAction(clip).play());
-        this._mixers.push(mixer);
-      }
-    });
   }
 
   _LoadEnvironment() {
@@ -607,10 +536,6 @@ class Application {
       scene: this._scene,
     }
     this._controls = new BasicCharacterController(params);
-    this._thirdPersonCamera = new ThirdPersonCamera({
-      camera: this._camera,
-      target: this._controls,
-    });
   }
 
   _LoadAnimatedModelAndPlay(path, modelFile, animFile, offset) {
@@ -696,6 +621,34 @@ class Application {
     this._rain.geometry.attributes.position.needsUpdate = true;
   }
 
+  _CreateWater() {
+    const waterGeometry = new THREE.PlaneGeometry(2000, 2000);
+    const waterNormals = new THREE.TextureLoader().load('./resources/water_norm.jpg', (texture) => {
+      texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    });
+
+    waterNormals.repeat.set(15, 15);
+
+    this._water = new Water(
+      waterGeometry,
+      {
+        textureWidth: 512,
+        textureHeight: 512,
+        waterNormals: waterNormals,
+        sunDirection: this._directionalLight.position.clone().normalize(),
+        sunColor: this._directionalLight.color,
+        waterColor: 0xc47e85, 
+        distortionScale: 100,
+        fog: this._scene.fog !== undefined
+      }
+    );
+
+    this._water.rotation.x = -Math.PI / 2;
+    this._water.position.y = -0.1;
+    this._scene.add(this._water);
+    this._water.material.uniforms[ 'size' ].value = 4.0;
+  }
+
   _OnWindowResize() {
     this._camera.aspect = window.innerWidth / window.innerHeight;
     this._camera.updateProjectionMatrix();
@@ -725,8 +678,11 @@ class Application {
     if (this._controls) {
       this._controls.Update(timeElapsedS);
     }
-    this._thirdPersonCamera.Update(timeElapsedS);
     this._UpdateRain(timeElapsedS);
+
+    if (this._water) {
+      this._water.material.uniforms['time'].value += timeElapsedS * 0.5;
+    }
   }
 }
 
@@ -734,5 +690,5 @@ class Application {
 let _APP = null;
 
 window.addEventListener('DOMContentLoaded', () => {
-  _APP = new Application();
+  _APP = new CharacterControllerDemo();
 });
