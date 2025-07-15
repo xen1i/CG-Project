@@ -72,6 +72,16 @@ class BasicCharacterController {
       loader.load('Idle.fbx', (a) => { _OnLoad('idle', a); });
     });
   }
+   get Position() {
+    return this._position;
+  }
+
+  get Rotation() {
+    if (!this._target) {
+      return new THREE.Quaternion();
+    }
+    return this._target.quaternion;
+  }
 
   Update(timeInSeconds) {
     if (!this._target) {
@@ -143,6 +153,7 @@ class BasicCharacterController {
     if (this._mixer) {
       this._mixer.update(timeInSeconds);
     }
+    this._position = this._target.position.clone();
   }
 };
 
@@ -391,14 +402,49 @@ class IdleState extends State {
   Update(_, input) {
     if (input._keys.forward || input._keys.backward) {
       this._parent.SetState('walk');
-    } else if (input._keys.space) {
-      this._parent.SetState('dance');
-    }
+    } 
   }
 };
+class ThirdPersonCamera {
+  constructor(params) {
+    this._params = params;
+    this._camera = params.camera;
 
+    this._currentPosition = new THREE.Vector3();
+    this._currentLookat = new THREE.Vector3();
+  }
 
-class CharacterControllerDemo {
+  _CalculateIdealOffset() {
+    const idealOffset = new THREE.Vector3(-15, 20, -30);
+    idealOffset.applyQuaternion(this._params.target.Rotation);
+    idealOffset.add(this._params.target.Position);
+    return idealOffset;
+  }
+
+  _CalculateIdealLookat() {
+    const idealLookat = new THREE.Vector3(0, 10, 50);
+    idealLookat.applyQuaternion(this._params.target.Rotation);
+    idealLookat.add(this._params.target.Position);
+    return idealLookat;
+  }
+
+  Update(timeElapsed) {
+    const idealOffset = this._CalculateIdealOffset();
+    const idealLookat = this._CalculateIdealLookat();
+
+    // const t = 0.05;
+    // const t = 4.0 * timeElapsed;
+    const t = 1.0 - Math.pow(0.001, timeElapsed);
+
+    this._currentPosition.lerp(idealOffset, t);
+    this._currentLookat.lerp(idealLookat, t);
+
+    this._camera.position.copy(this._currentPosition);
+    this._camera.lookAt(this._currentLookat);
+  }
+}
+
+class Application {
   constructor() {
     this._Initialize();
   }
@@ -428,6 +474,9 @@ class CharacterControllerDemo {
     this._camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
     this._camera.position.set(25, 10, 25);
 
+    this._thirdPersonCamera = new ThirdPersonCamera({
+      camera: this._camera,
+    });
     this._scene = new THREE.Scene();
 
     let light = new THREE.DirectionalLight(0xFFFFFF, 1.0);
@@ -473,6 +522,7 @@ class CharacterControllerDemo {
     this._LoadEnvironment();
 
     this._RAF();
+    this._CreateRain();
   }
 
   _LoadEnvironment() {
@@ -521,6 +571,10 @@ class CharacterControllerDemo {
       scene: this._scene,
     }
     this._controls = new BasicCharacterController(params);
+    this._thirdPersonCamera = new ThirdPersonCamera({
+      camera: this._camera,
+      target: this._controls,
+    });
   }
 
   _LoadAnimatedModelAndPlay(path, modelFile, animFile, offset) {
@@ -544,7 +598,67 @@ class CharacterControllerDemo {
       this._scene.add(fbx);
     });
   }
+  _CreateRain() {
+  const rainCount = 10000;
+  const rainGeometry = new THREE.BufferGeometry();
+  const rainPositions = new Float32Array(rainCount * 6); // each line segment has 2 points * 3 coords
+  const rainVelocities = new Float32Array(rainCount * 2);
+  for (let i = 0; i < rainCount; i++) {
+    // Start point of line segment (x, y, z)
+    const x = Math.random() * 400 - 200;
+    const y = Math.random() * 500;
+    const z = Math.random() * 400 - 200;
+    // End point is just below start point, to create a vertical line (streak)
+    const endY = y - 5;
 
+    // fill start point coords
+    rainPositions[i * 6 + 0] = x;
+    rainPositions[i * 6 + 1] = y;
+    rainPositions[i * 6 + 2] = z;
+
+    // fill end point coords
+    rainPositions[i * 6 + 3] = x;
+    rainPositions[i * 6 + 4] = endY;
+    rainPositions[i * 6 + 5] = z;
+
+    rainVelocities[i * 2 + 0] = 0;
+    rainVelocities[i * 2 + 1] = 0;
+
+  }
+
+  rainGeometry.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
+  rainGeometry.setAttribute('velocity', new THREE.BufferAttribute(rainVelocities, 1));
+  const rainMaterial = new THREE.LineBasicMaterial({
+    color: 0xaaaaaa,
+    transparent: true,
+    opacity: 0.6,
+  });
+  rainMaterial.depthTest = false;
+  rainMaterial.depthWrite = false;
+  rainMaterial.renderOrder = 999;
+
+  this._rain = new THREE.LineSegments(rainGeometry, rainMaterial);
+  this._scene.add(this._rain);
+}
+
+_UpdateRain(timeElapsed) {
+  if (!this._rain) return;
+
+  const positions = this._rain.geometry.attributes.position.array;
+  const velocities = this._rain.geometry.attributes.velocity.array;
+
+  for (let i = 0; i < positions.length; i += 3) {
+    velocities[i / 3] -= 9.8 * timeElapsed * 0.5; // gravity
+    positions[i + 1] += velocities[i / 3] * timeElapsed;
+
+    if (positions[i + 1] < 0) {
+      positions[i + 1] = 500;
+      velocities[i / 3] = 0;
+    }
+  }
+
+  this._rain.geometry.attributes.position.needsUpdate = true;
+}
   _OnWindowResize() {
     this._camera.aspect = window.innerWidth / window.innerHeight;
     this._camera.updateProjectionMatrix();
@@ -574,12 +688,13 @@ class CharacterControllerDemo {
     if (this._controls) {
       this._controls.Update(timeElapsedS);
     }
-  }
+    this._thirdPersonCamera.Update(timeElapsedS);
+    this._UpdateRain(timeElapsedS);
 }
-
+}
 
 let _APP = null;
 
 window.addEventListener('DOMContentLoaded', () => {
-  _APP = new CharacterControllerDemo();
+  _APP = new Application();
 });
