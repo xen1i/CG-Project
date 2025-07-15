@@ -36,6 +36,13 @@ class BasicCharacterController {
 
     this._LoadModels();
   }
+     get Position() {
+    return this._target.position;
+  }
+
+  get Rotation() {
+    return this._target.quaternion;
+  }
 
   _LoadModels() {
     const loader = new FBXLoader();
@@ -392,8 +399,6 @@ class IdleState extends State {
   Update(_, input) {
     if (input._keys.forward || input._keys.backward) {
       this._parent.SetState('walk');
-    } else if (input._keys.space) {
-      this._parent.SetState('dance');
     }
   }
 };
@@ -536,6 +541,10 @@ class CharacterControllerDemo {
       scene: this._scene,
     }
     this._controls = new BasicCharacterController(params);
+    this._thirdPersonCamera = new ThirdPersonCamera({
+      camera: this._camera,
+      target: this._controls,
+    });
   }
 
   _LoadAnimatedModelAndPlay(path, modelFile, animFile, offset) {
