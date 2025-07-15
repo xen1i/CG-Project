@@ -585,6 +585,67 @@ class CharacterControllerDemo {
       this._scene.add(fbx);
     });
   }
+  _CreateRain() {
+    const rainCount = 10000;
+    const rainGeometry = new THREE.BufferGeometry();
+    const rainPositions = new Float32Array(rainCount * 6); // each line segment has 2 points * 3 coords
+    const rainVelocities = new Float32Array(rainCount * 2);
+    for (let i = 0; i < rainCount; i++) {
+      // Start point of line segment (x, y, z)
+      const x = Math.random() * 400 - 200;
+      const y = Math.random() * 500;
+      const z = Math.random() * 400 - 200;
+      // End point is just below start point, to create a vertical line (streak)
+      const endY = y - 5;
+
+      // fill start point coords
+      rainPositions[i * 6 + 0] = x;
+      rainPositions[i * 6 + 1] = y;
+      rainPositions[i * 6 + 2] = z;
+
+      // fill end point coords
+      rainPositions[i * 6 + 3] = x;
+      rainPositions[i * 6 + 4] = endY;
+      rainPositions[i * 6 + 5] = z;
+
+      rainVelocities[i * 2 + 0] = 0;
+      rainVelocities[i * 2 + 1] = 0;
+
+    }
+
+    rainGeometry.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
+    rainGeometry.setAttribute('velocity', new THREE.BufferAttribute(rainVelocities, 1));
+    const rainMaterial = new THREE.LineBasicMaterial({
+      color: 0xaaaaaa,
+      transparent: true,
+      opacity: 0.6,
+    });
+    rainMaterial.depthTest = false;
+    rainMaterial.depthWrite = false;
+    rainMaterial.renderOrder = 999;
+
+    this._rain = new THREE.LineSegments(rainGeometry, rainMaterial);
+    this._scene.add(this._rain);
+  }
+
+  _UpdateRain(timeElapsed) {
+    if (!this._rain) return;
+
+    const positions = this._rain.geometry.attributes.position.array;
+    const velocities = this._rain.geometry.attributes.velocity.array;
+
+    for (let i = 0; i < positions.length; i += 3) {
+      velocities[i / 3] -= 9.8 * timeElapsed * 0.5; // gravity
+      positions[i + 1] += velocities[i / 3] * timeElapsed;
+
+      if (positions[i + 1] < 0) {
+        positions[i + 1] = 500;
+        velocities[i / 3] = 0;
+      }
+    }
+
+    this._rain.geometry.attributes.position.needsUpdate = true;
+  }
 
   _OnWindowResize() {
     this._camera.aspect = window.innerWidth / window.innerHeight;
@@ -615,6 +676,7 @@ class CharacterControllerDemo {
     if (this._controls) {
       this._controls.Update(timeElapsedS);
     }
+    this._UpdateRain(timeElapsedS);
   }
 }
 
