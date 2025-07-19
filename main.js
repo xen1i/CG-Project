@@ -541,7 +541,7 @@ class Application {
     loader.load('./resources/flags/cross_flag.glb', (gltf) => {
       const animations = gltf.animations;
       const flagTemplate = gltf.scene;
-      const instanceCount = 30; 
+      const instanceCount = 30;
 
       const spawnArea = { width: 1000, depth: 1000 };
       const center = new THREE.Vector3(0, 0, 150);
@@ -552,9 +552,9 @@ class Application {
         const x = center.x + (Math.random() - 0.5) * spawnArea.width;
         const z = center.z + (Math.random() - 0.5) * spawnArea.depth;
 
-        newFlag.position.set(x, 1.5, z); 
+        newFlag.position.set(x, 1.5, z);
         newFlag.rotation.y = Math.random() * Math.PI * 2;
-        newFlag.scale.set(10, 10, 10); 
+        newFlag.scale.set(10, 10, 10);
 
         newFlag.traverse(child => {
           if (child.isMesh) {
@@ -667,15 +667,16 @@ class Application {
   _CreateRain() {
     const rainCount = 10000;
     const rainGeometry = new THREE.BufferGeometry();
-    const rainPositions = new Float32Array(rainCount * 6); // each line segment has 2 points * 3 coords
+    const rainPositions = new Float32Array(rainCount * 6); 
     const rainVelocities = new Float32Array(rainCount * 2);
+     const rainLineLength = 5
     for (let i = 0; i < rainCount; i++) {
-      // Start point of line segment (x, y, z)
+      
       const x = Math.random() * 400 - 200;
       const y = Math.random() * 500;
       const z = Math.random() * 400 - 200;
-      // End point is just below start point, to create a vertical line (streak)
-      const endY = y - 5;
+      
+      const endY = y - rainLineLength;
 
       // fill start point coords
       rainPositions[i * 6 + 0] = x;
@@ -710,20 +711,48 @@ class Application {
   _UpdateRain(timeElapsed) {
     if (!this._rain) return;
 
-    const positions = this._rain.geometry.attributes.position.array;
-    const velocities = this._rain.geometry.attributes.velocity.array;
+    const rainGeo = this._rain.geometry;
+    const positions = rainGeo.attributes.position.array;
+    const velocities = rainGeo.attributes.velocity.array;
 
-    for (let i = 0; i < positions.length; i += 3) {
-      velocities[i / 3] -= 9.8 * timeElapsed * 0.5; // gravity
-      positions[i + 1] += velocities[i / 3] * timeElapsed;
+    const rainLength = 5; 
+    const rainHeight = 100;
+    const rainSpread = 200; // Increased spread for better coverage
 
-      if (positions[i + 1] < 0) {
-        positions[i + 1] = 500;
-        velocities[i / 3] = 0;
+    // Use the current camera position to make rain relative to the view
+    const cameraPosition = this._camera.position;
+
+    for (let i = 0; i < positions.length; i += 6) {
+      let dropIndex = i / 6;
+
+      // Update vertical velocity
+      velocities[dropIndex * 2 + 0] -= 9.8 * timeElapsed;
+      velocities[dropIndex * 2 + 1] -= 9.8 * timeElapsed;
+
+      // Update y positions
+      positions[i + 1] += velocities[dropIndex * 2 + 0] * timeElapsed;
+      positions[i + 4] += velocities[dropIndex * 2 + 1] * timeElapsed;
+
+      // Reset drop if below camera view or ground level
+      if (positions[i + 1] < cameraPosition.y - rainHeight / 2 || positions[i + 4] < 0) {
+        const x = cameraPosition.x + (Math.random() - 0.5) * rainSpread;
+        const y = cameraPosition.y + rainHeight / 2 + Math.random() * rainHeight; // Spawn above camera
+        const z = cameraPosition.z + (Math.random() - 0.5) * rainSpread;
+
+        positions[i + 0] = x;
+        positions[i + 1] = y;
+        positions[i + 2] = z;
+
+        positions[i + 3] = x;
+        positions[i + 4] = y - rainLength;
+        positions[i + 5] = z;
+
+        velocities[dropIndex * 2 + 0] = 0;
+        velocities[dropIndex * 2 + 1] = 0;
       }
     }
 
-    this._rain.geometry.attributes.position.needsUpdate = true;
+    rainGeo.attributes.position.needsUpdate = true;
   }
 
   _CreateWater() {
