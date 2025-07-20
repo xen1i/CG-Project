@@ -37,10 +37,16 @@ class BasicCharacterController {
     this._LoadModels();
   }
   get Position() {
+    if (!this._target) {
+      return new THREE.Vector3();
+    }
     return this._target.position;
   }
 
   get Rotation() {
+    if (!this._target) {
+        return new THREE.Quaternion();
+    }
     return this._target.quaternion;
   }
 
@@ -73,11 +79,11 @@ class BasicCharacterController {
         };
       };
 
-      const loader = new FBXLoader(this._manager);
-      loader.setPath('./resources/player/');
-      loader.load('Walking.fbx', (a) => { _OnLoad('walk', a); });
-      loader.load('Running.fbx', (a) => { _OnLoad('run', a); });
-      loader.load('Idle.fbx', (a) => { _OnLoad('idle', a); });
+      const animLoader = new FBXLoader(this._manager);
+      animLoader.setPath('./resources/player/');
+      animLoader.load('Walking.fbx', (a) => { _OnLoad('walk', a); });
+      animLoader.load('Running.fbx', (a) => { _OnLoad('run', a); });
+      animLoader.load('Idle.fbx', (a) => { _OnLoad('idle', a); });
     });
   }
 
@@ -427,8 +433,6 @@ class ThirdPersonCamera {
     const idealOffset = this._CalculateIdealOffset();
     const idealLookat = this._CalculateIdealLookat();
 
-    // const t = 0.05;
-    // const t = 4.0 * timeElapsed;
     const t = 1.0 - Math.pow(0.001, timeElapsed);
 
     this._currentPosition.lerp(idealOffset, t);
@@ -525,15 +529,126 @@ class Application {
 
     this._mixers = [];
     this._previousRAF = null;
+  
+    this._initialMessages = [];
+    this._sceneTime = 0;
+    this._poroModel = null;
+    this._poroText = null;
 
+     this._wavyTextMeshes = []; 
     this._LoadAnimatedModel();
     this._LoadEnvironment();
     this._LoadPoroModel();
     this._LoadCrossFlags();
     this._CreateWater();
-
-    this._RAF();
+    this._CreateInitialMessages();
     this._CreateRain();
+    
+    this._RAF();
+  }
+  
+  _createTextSprite(text, options = {}) {
+    const {
+        position = new THREE.Vector3(0, 0, 0),
+        fontSize = 50,
+        fontFace = 'Arial',
+        textColor = 'rgba(224, 57, 57, 1)',
+        scale = new THREE.Vector3(10, 5, 1),
+        isWavy = false
+    } = options;
+
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    canvas.width = 1024; 
+    canvas.height = 256;
+
+    context.font = `Bold ${fontSize}px ${fontFace}`;
+    context.fillStyle = textColor;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    
+    context.shadowColor = "black";
+    context.shadowOffsetX = 2;
+    context.shadowOffsetY = 2;
+    context.shadowBlur = 5;
+    
+    context.fillText(text, canvas.width / 2, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    
+    let material;
+    let object; 
+
+    // shader for text
+    if (isWavy) {
+        material = new THREE.ShaderMaterial({
+            uniforms: {
+                map: { value: texture },
+                time: { value: 0.0 },
+                opacity: { value: 1.0 },
+            },
+            vertexShader: `
+                uniform float time;
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    vec3 p = position;
+                    p.y += sin(p.x * 5.0 + time * 2.0) * 0.05; // This wave effect is better on a mesh
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform sampler2D map;
+                uniform float opacity;
+                varying vec2 vUv;
+                void main() {
+                    vec4 texColor = texture2D(map, vUv);
+                    if (texColor.a < 0.1) discard; // Alpha test
+                    gl_FragColor = vec4(texColor.rgb, texColor.a * opacity);
+                }
+            `,
+            transparent: true,
+            depthWrite: false, 
+        });
+        
+        const geometry = new THREE.PlaneGeometry(1, 1);
+        object = new THREE.Mesh(geometry, material);
+        this._wavyTextMeshes.push(object);
+
+    } else {
+        material = new THREE.SpriteMaterial({
+            map: texture,
+            transparent: true,
+            depthWrite: false,
+        });
+        object = new THREE.Sprite(material);
+    }
+    object.position.copy(position);
+    object.scale.copy(scale);
+
+    this._scene.add(object);
+    return object;
+  }
+
+  _CreateInitialMessages() {
+    const message1 = this._createTextSprite("Chosen one...You are finally here.", {
+        position: new THREE.Vector3(-10, 15, 20),
+        scale: new THREE.Vector3(40, 10, 1),
+        isWavy: true,
+        fontSize: 48,
+        textColor: 'rgba(224, 57, 57, 1)'
+    });
+
+    const message2 = this._createTextSprite("Come to me. Follow the Light.", {
+        position: new THREE.Vector3(10, 10, 25),
+        scale: new THREE.Vector3(40, 10, 1),
+        isWavy: true,
+        fontSize: 48,
+        textColor: 'rgba(224, 57, 57, 1)'
+    });
+    
+    this._initialMessages.push(message1, message2);
   }
 
   _LoadCrossFlags() {
@@ -541,7 +656,7 @@ class Application {
     loader.load('./resources/flags/cross_flag.glb', (gltf) => {
       const animations = gltf.animations;
       const flagTemplate = gltf.scene;
-      const instanceCount = 30;
+      const instanceCount = 50;
 
       const spawnArea = { width: 1000, depth: 1000 };
       const center = new THREE.Vector3(0, 0, 150);
@@ -587,6 +702,16 @@ class Application {
       });
       gltf.scene.rotation.y = Math.PI;
       this._scene.add(poroModel);
+
+      this._poroModel = poroModel;
+
+      this._poroText = this._createTextSprite("You have fought well.", {
+          position: new THREE.Vector3(0, 25, 445),
+          scale: new THREE.Vector3(30, 7.5, 1),
+          fontSize: 45,
+          textColor: 'rgba(224, 57, 57, 1)'
+      });
+      this._poroText.visible = false;
     });
   }
 
@@ -678,19 +803,16 @@ class Application {
       
       const endY = y - rainLineLength;
 
-      // fill start point coords
       rainPositions[i * 6 + 0] = x;
       rainPositions[i * 6 + 1] = y;
       rainPositions[i * 6 + 2] = z;
 
-      // fill end point coords
       rainPositions[i * 6 + 3] = x;
       rainPositions[i * 6 + 4] = endY;
       rainPositions[i * 6 + 5] = z;
 
       rainVelocities[i * 2 + 0] = 0;
       rainVelocities[i * 2 + 1] = 0;
-
     }
 
     rainGeometry.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
@@ -717,26 +839,22 @@ class Application {
 
     const rainLength = 5; 
     const rainHeight = 100;
-    const rainSpread = 200; // Increased spread for better coverage
+    const rainSpread = 200;
 
-    // Use the current camera position to make rain relative to the view
     const cameraPosition = this._camera.position;
 
     for (let i = 0; i < positions.length; i += 6) {
       let dropIndex = i / 6;
 
-      // Update vertical velocity
       velocities[dropIndex * 2 + 0] -= 9.8 * timeElapsed;
       velocities[dropIndex * 2 + 1] -= 9.8 * timeElapsed;
 
-      // Update y positions
       positions[i + 1] += velocities[dropIndex * 2 + 0] * timeElapsed;
       positions[i + 4] += velocities[dropIndex * 2 + 1] * timeElapsed;
 
-      // Reset drop if below camera view or ground level
       if (positions[i + 1] < cameraPosition.y - rainHeight / 2 || positions[i + 4] < 0) {
         const x = cameraPosition.x + (Math.random() - 0.5) * rainSpread;
-        const y = cameraPosition.y + rainHeight / 2 + Math.random() * rainHeight; // Spawn above camera
+        const y = cameraPosition.y + rainHeight / 2 + Math.random() * rainHeight;
         const z = cameraPosition.z + (Math.random() - 0.5) * rainSpread;
 
         positions[i + 0] = x;
@@ -805,6 +923,8 @@ class Application {
 
   _Step(timeElapsed) {
     const timeElapsedS = timeElapsed * 0.001;
+    this._sceneTime += timeElapsedS;
+    
     if (this._mixers) {
       this._mixers.map(m => m.update(timeElapsedS));
     }
@@ -812,6 +932,23 @@ class Application {
     if (this._controls) {
       this._controls.Update(timeElapsedS);
     }
+
+    this._wavyTextMeshes.forEach(textMesh => {
+        textMesh.quaternion.copy(this._camera.quaternion);
+        if (textMesh.material.uniforms && textMesh.material.uniforms.time) {
+            textMesh.material.uniforms.time.value = this._sceneTime;
+        }
+    });
+
+    if (this._controls._target && this._poroModel && this._poroText) {
+        const playerPosition = this._controls.Position;
+        const poroPosition = this._poroModel.position;
+        const distance = playerPosition.distanceTo(poroPosition);
+        
+        const PROXIMITY_THRESHOLD = 40;
+        this._poroText.visible = distance < PROXIMITY_THRESHOLD;
+    }
+
     this._thirdPersonCamera.Update(timeElapsedS);
     this._UpdateRain(timeElapsedS);
 
