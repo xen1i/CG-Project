@@ -1,5 +1,6 @@
 # Computergrafik Beleg
 ## Wichtige Informationen
+GitHub-Projekt: https://github.com/xen1i/CG-Project
 ### Environment runterladen
 Zum Ausführen dieses Projekt muss diese [Datei](https://drive.google.com/drive/folders/1Mcl-LbyEfW0VWQlNbH08rsTTw33krDKg) von Google Drive runtergeladen werden und in `/recources/environment`hinzugefügt werden. Die Szene war zu groß um sie auf Github zu hosten. **Achtung: diese Datei ist 1.5GB groß.**
 ### Dedizierte Grafikkarte 
